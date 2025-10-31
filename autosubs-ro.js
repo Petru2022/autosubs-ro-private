@@ -1,4 +1,4 @@
-// Plugin AutoSubs RO pentru Lampa (webOS/browser): buton în meniu + panou setări
+// AutoSubs RO - Plugin compatibil Lampa TV (webOS LG) & browser PC
 (function () {
     'use strict';
 
@@ -6,9 +6,9 @@
     const PLUGIN_ID = 'autosubs_ro_safe';
     const SETTINGS_KEY = 'autosubs_safe_settings';
 
-    // === Utility ===
+    // === UTILS ===
     function notify(msg) {
-        if (window.Noty) Noty.show(msg);
+        if (window.Noty && typeof Noty.show === "function") Noty.show(msg);
         else alert(msg);
         console.log('[AutoSubs RO]', msg);
     }
@@ -25,11 +25,11 @@
         }
     }
 
-    // === Meniu plugin ===
+    // === MENIU PLUGIN ===
     function tryAddMenuEntry(retries = 0) {
         const menuList = document.querySelector('.menu__list');
         if (!menuList) {
-            if (retries < 20) setTimeout(() => tryAddMenuEntry(retries + 1), 700);
+            if (retries < 25) setTimeout(() => tryAddMenuEntry(retries + 1), 600);
             return;
         }
         if (document.getElementById('autosubs-menu-btn')) return;
@@ -39,13 +39,13 @@
         li.innerHTML = `<a id="autosubs-menu-btn" class="menu__link" href="#" style="color:#e50914;">${PLUGIN_NAME}</a>`;
         menuList.appendChild(li);
 
-        li.addEventListener('click', e => {
+        li.querySelector('a').onclick = e => {
             e.preventDefault();
             showSettings();
-        });
+        };
     }
 
-    // === Panou setări ===
+    // === SETĂRI ===
     function showSettings() {
         const s = loadSettings();
         const html = `
@@ -71,7 +71,7 @@
         }, 100);
     }
 
-    // === Modal simplu (compatibil browser TV) ===
+    // === MODAL GENERIC ===
     function showModal(content) {
         let modal = document.getElementById('autosubs-modal');
         if (!modal) {
@@ -89,9 +89,63 @@
         if (modal) modal.style.display = 'none';
     }
 
-    // === Inițializare ===
+    // === DETECTARE PLAYER & PORNIRE SUBTITLARE ===
+    function listenPlayer() {
+        let lastUrl = '';
+        setInterval(() => {
+            const video = document.querySelector('video');
+            if (video && video.currentSrc && video.currentSrc !== lastUrl) {
+                lastUrl = video.currentSrc;
+                if (loadSettings().enabled) {
+                    setTimeout(() => onPlayerStart(video), 1500);
+                }
+            }
+        }, 2000);
+    }
+
+    // === PE PORNIRE FILM/EPISOD ===
+    function onPlayerStart(video) {
+        // Încearcă să extragă titlul și anul
+        let title = '';
+        let year = '';
+        let season = '';
+        let episode = '';
+
+        // Lampa 3.x, titlul filmului apare în .player-panel__title sau .card__title
+        const tNode = document.querySelector('.player-panel__title') || document.querySelector('.card__title');
+        if (tNode) title = tNode.textContent.trim();
+
+        // Exemplu: încearcă să extragi și anul (dacă există)
+        const yNode = document.querySelector('.player-panel__quality');
+        if (yNode && /^\d{4}$/.test(yNode.textContent.trim())) year = yNode.textContent.trim();
+
+        // TODO: extrage sezon/episod dacă e serial
+
+        if (!title) {
+            notify('[AutoSubs RO] Titlu lipsă, nu caut subtitrare.');
+            return;
+        }
+        searchSubtitles({ title, year, season_number: season, episode_number: episode });
+    }
+
+    // === CĂUTARE SUBTITRĂRI (demo – aici poți integra funcția reală) ===
+    function searchSubtitles(info) {
+        notify(`[AutoSubs RO] Caut subtitrare pentru: ${info.title} ${info.year||''}`.trim());
+        // TODO: Integrează aici logica de descărcare și încărcare subtitle (vezi mai jos)
+        // Exemplu: downloadSrt(...);
+    }
+
+    // === DESCĂRCARE ȘI ÎNCĂRCARE SUBTITRARE (EXEMPLU) ===
+    // function downloadSrt(url) { ... }
+    // function loadInPlayer(srtText) { ... }
+    // function translateSrt(srt, callback) { ... }
+    // Adaugă aici funcțiile tale complete de procesare subtitle!
+
+    // === INIȚIALIZARE ===
     document.addEventListener('DOMContentLoaded', () => {
         tryAddMenuEntry();
+        listenPlayer();
         notify(`${PLUGIN_NAME} activat!`);
     });
+
 })();
