@@ -1,21 +1,42 @@
-// Plugin demo AutoSubs RO pentru Lampa 3.x - adăugare meniu manuală
+// Plugin AutoSubs RO pentru Lampa (webOS/browser): buton în meniu + panou setări
 (function () {
     'use strict';
 
-    // Așteaptă ca meniul să existe în DOM
-    function addMenuEntry() {
+    const PLUGIN_NAME = 'AutoSubs RO';
+    const PLUGIN_ID = 'autosubs_ro_safe';
+    const SETTINGS_KEY = 'autosubs_safe_settings';
+
+    // === Utility ===
+    function notify(msg) {
+        if (window.Noty) Noty.show(msg);
+        else alert(msg);
+        console.log('[AutoSubs RO]', msg);
+    }
+
+    function saveSettings(s) {
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
+    }
+    function loadSettings() {
+        try {
+            const s = localStorage.getItem(SETTINGS_KEY);
+            return s ? JSON.parse(s) : { enabled: true, translate: true };
+        } catch {
+            return { enabled: true, translate: true };
+        }
+    }
+
+    // === Meniu plugin ===
+    function tryAddMenuEntry(retries = 0) {
         const menuList = document.querySelector('.menu__list');
         if (!menuList) {
-            // Încearcă din nou după 1 secundă
-            setTimeout(addMenuEntry, 1000);
+            if (retries < 20) setTimeout(() => tryAddMenuEntry(retries + 1), 700);
             return;
         }
-        // Evită să adaugi de două ori
         if (document.getElementById('autosubs-menu-btn')) return;
 
         const li = document.createElement('li');
         li.className = 'menu__item';
-        li.innerHTML = `<a id="autosubs-menu-btn" class="menu__link" href="#" style="color:#e50914;">AutoSubs RO</a>`;
+        li.innerHTML = `<a id="autosubs-menu-btn" class="menu__link" href="#" style="color:#e50914;">${PLUGIN_NAME}</a>`;
         menuList.appendChild(li);
 
         li.addEventListener('click', e => {
@@ -24,12 +45,14 @@
         });
     }
 
+    // === Panou setări ===
     function showSettings() {
+        const s = loadSettings();
         const html = `
             <div style="padding:20px;color:#fff;">
-                <h3>AutoSubs RO - Setări</h3>
-                <label><input type="checkbox" id="en" checked> Activare</label><br><br>
-                <label><input type="checkbox" id="tr" checked> Traducere EN→RO</label><br><br>
+                <h3>${PLUGIN_NAME} - Setări</h3>
+                <label><input type="checkbox" id="en" ${s.enabled ? 'checked' : ''}> Activare</label><br><br>
+                <label><input type="checkbox" id="tr" ${s.translate ? 'checked' : ''}> Traducere EN→RO</label><br><br>
                 <button id="save_autosubs" style="background:#e50914;color:#fff;padding:10px 20px;border:none;border-radius:4px;">Salvează</button>
                 <button id="close_autosubs" style="background:#666;color:#fff;padding:10px 20px;border:none;border-radius:4px;margin-left:10px;">Închide</button>
             </div>
@@ -37,13 +60,18 @@
         showModal(html);
         setTimeout(() => {
             document.getElementById('save_autosubs').onclick = () => {
-                alert('Setări salvate!');
+                saveSettings({
+                    enabled: document.getElementById('en').checked,
+                    translate: document.getElementById('tr').checked
+                });
+                notify('Setări salvate!');
                 closeModal();
             };
             document.getElementById('close_autosubs').onclick = () => closeModal();
         }, 100);
     }
 
+    // === Modal simplu (compatibil browser TV) ===
     function showModal(content) {
         let modal = document.getElementById('autosubs-modal');
         if (!modal) {
@@ -61,6 +89,9 @@
         if (modal) modal.style.display = 'none';
     }
 
-    // Inițializare când DOM-ul este gata
-    document.addEventListener('DOMContentLoaded', addMenuEntry);
+    // === Inițializare ===
+    document.addEventListener('DOMContentLoaded', () => {
+        tryAddMenuEntry();
+        notify(`${PLUGIN_NAME} activat!`);
+    });
 })();
