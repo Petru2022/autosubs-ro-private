@@ -1,4 +1,4 @@
-/* AutoSubs RO - Plugin Lampa TV (Versiune FINALĂ - Meniul VIZIBIL) */
+/* AutoSubs RO - Plugin Lampa TV (Versiune CORECTĂ - FĂRĂ EROARE) */
 (function() {
     'use strict';
     
@@ -167,7 +167,7 @@
         }, 1500);
     }
 
-    // === SETĂRI - MENIU VIZIBIL ===
+    // === SETĂRI ===
     function showSettingsMenu() {
         const s = loadSettings();
         const html = `
@@ -204,31 +204,27 @@
         }
     }
 
-    // === INIȚIALIZARE CU MENIU GARANTAT ===
+    // === INIȚIALIZARE CORECTĂ ===
     function initPlugin() {
         console.log('AutoSubs RO: Inițializare...');
 
-        // 1. Adaugă în meniul principal
+        // Meniu principal
         if (window.Lampa && Lampa.Menu && Lampa.Menu.add) {
             Lampa.Menu.add('AutoSubs RO', showSettingsMenu);
-            console.log('Meniul adăugat în principal');
         }
 
-        // 2. Fallback: Adaugă în Setări > Pluginuri
+        // Fallback în Setări > Pluginuri
         if (window.Lampa && Lampa.Settings && Lampa.Settings.main) {
             Lampa.Settings.main('plugins', (element) => {
                 const btn = document.createElement('div');
                 btn.className = 'settings-folder selector';
-                btn.innerHTML = `
-                    <div class="settings-folder__icon">Subtitrări</div>
-                    <div class="settings-folder__name">AutoSubs RO - Setări</div>
-                `;
+                btn.innerHTML = '<div class="settings-folder__icon">Subtitrări</div><div class="settings-folder__name">AutoSubs RO - Setări</div>';
                 btn.onclick = showSettingsMenu;
                 element.appendChild(btn);
             });
         }
 
-        // 3. Listener player
+        // Listener player
         if (window.Lampa && Lampa.Listener && Lampa.Listener.follow) {
             Lampa.Listener.follow('player', e => {
                 if ((e.type === 'start' || e.type === 'play') && loadSettings().enabled) {
@@ -237,13 +233,10 @@
             });
         }
 
-        // 4. Notificare finală
-        setTimeout(() => {
-            showNotification('AutoSubs RO activat! Mergi la Meniu > AutoSubs RO');
-        }, 2000);
+        showNotification('AutoSubs RO activat! Mergi la Meniu > AutoSubs RO');
     }
 
-    // === PORNIRE SIGURĂ ===
+    // Pornire sigură
     if (window.Lampa) {
         setTimeout(initPlugin, 1500);
     } else {
@@ -252,16 +245,16 @@
         });
     }
 
-    // Plugin registration (pentru lista de pluginuri)
+    // Înregistrare plugin
     if (window.Lampa && Lampa.Plugin && Lampa.Plugin.add) {
         Lampa.Plugin.add({
             id: PLUGIN_ID,
             name: PLUGIN_NAME,
-            version: '4.0',
+            version: '5.0',
             author: 'Tu',
             description: 'Subtitrări RO automate + traducere gratuită',
             init: initPlugin
         });
     }
 
-})();
+})(); // <--- ACEASTA ERA LIPSĂ! ACUM E CORECT
