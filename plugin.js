@@ -1,9 +1,9 @@
-﻿/* AutoSubs RO - Plugin Lampa TV (Versiune PRIVATA) */
+/* AutoSubs RO - Plugin Lampa TV (Versiune FINALĂ - Meniul VIZIBIL) */
 (function() {
     'use strict';
     
-    const PLUGIN_ID = 'autosubs_ro_private';
-    const PLUGIN_NAME = 'AutoSubs RO (Privat)';
+    const PLUGIN_ID = 'autosubs_ro_final';
+    const PLUGIN_NAME = 'AutoSubs RO';
     
     // Storage
     function getStorage() {
@@ -13,20 +13,25 @@
         };
     }
     
-    function saveSettings(s) { getStorage().set('autosubs_private_settings', JSON.stringify(s)); }
+    function saveSettings(s) { 
+        getStorage().set('autosubs_settings', JSON.stringify(s)); 
+    }
+    
     function loadSettings() {
         try {
-            const saved = getStorage().get('autosubs_private_settings');
+            const saved = getStorage().get('autosubs_settings');
             return saved ? JSON.parse(saved) : { enabled: true, translate: true };
-        } catch { return { enabled: true, translate: true }; }
+        } catch { 
+            return { enabled: true, translate: true }; 
+        }
     }
     
     function showNotification(msg) {
-        if (Lampa.Noty) Lampa.Noty.show(msg);
+        if (window.Lampa && Lampa.Noty) Lampa.Noty.show(msg);
         console.log('AutoSubs RO:', msg);
     }
     
-    // === CAUTARE SUBTITRARI ENG ===
+    // === CĂUTARE SUBTITRĂRI ENG ===
     function searchSubtitles(movieInfo) {
         const s = loadSettings();
         if (!s.enabled) return;
@@ -37,16 +42,16 @@
         const episode = movieInfo.episode_number;
         const isSeries = !!season && !!episode;
 
-        if (!title) return showNotification('Titlu lipsa');
+        if (!title) return showNotification('Titlu lipsă');
 
-        showNotification(`Caut EN > RO: ${title}`);
+        showNotification(`Căut EN → RO: ${title}`);
         
         const q = encodeURIComponent(title + (year ? ` ${year}` : ''));
         fetch(`https://yifysubtitles.ch/search?q=${q}`)
             .then(r => r.text())
             .then(html => parseYify(html, title, year, isSeries, season, episode))
             .catch(() => {
-                showNotification('YIFY indisponibil, incerc Subscene...');
+                showNotification('YIFY indisponibil, încerc Subscene...');
                 searchSubscene(title, year, isSeries, season, episode);
             });
     }
@@ -65,7 +70,7 @@
                 return;
             }
         }
-        showNotification('Nu am gasit pe YIFY');
+        showNotification('Nu am găsit pe YIFY');
         searchSubscene(title, year, isSeries, season, episode);
     }
 
@@ -90,11 +95,11 @@
                         return;
                     }
                 }
-                showNotification('Nu am gasit subtitrare ENG');
+                showNotification('Nu am găsit subtitrare ENG');
             });
     }
 
-    // === DESCARCARE + TRADUCERE ===
+    // === DESCĂRCARE + TRADUCERE ===
     async function downloadAndProcess(srtUrl) {
         showNotification('Descarc .srt...');
         try {
@@ -104,7 +109,7 @@
             const blob = new Blob([translated], { type: 'text/srt' });
             const url = URL.createObjectURL(blob);
             loadSubtitleInPlayer(url);
-            showNotification('Subtitrare RO incarcata!');
+            showNotification('Subtitrare RO încărcată!');
         } catch (e) {
             showNotification('Eroare procesare');
         }
@@ -162,52 +167,101 @@
         }, 1500);
     }
 
-    // === SETARI ===
+    // === SETĂRI - MENIU VIZIBIL ===
     function showSettingsMenu() {
         const s = loadSettings();
         const html = `
             <div style="padding:20px;color:#fff;font-family:Arial;">
-                <h3>${PLUGIN_NAME}</h3>
-                <label><input type="checkbox" id="en" ${s.enabled?'checked':''}> Activare</label><br><br>
-                <label><input type="checkbox" id="tr" ${s.translate!==false?'checked':''}> Traducere EN>RO</label><br><br>
-                <button id="save" style="background:#e50914;color:#fff;padding:10px 20px;border:none;border-radius:4px;">Salveaza</button>
-                <button onclick="Lampa.Modal.close()" style="background:#666;color:#fff;padding:10px 20px;border:none;border-radius:4px;margin-left:10px;">Inchide</button>
+                <h3 style="margin-bottom:20px;">${PLUGIN_NAME} - Setări</h3>
+                <label style="display:block;margin-bottom:15px;">
+                    <input type="checkbox" id="en" ${s.enabled?'checked':''} style="margin-right:8px;">
+                    Activare plugin
+                </label>
+                <label style="display:block;margin-bottom:20px;">
+                    <input type="checkbox" id="tr" ${s.translate!==false?'checked':''} style="margin-right:8px;">
+                    Traducere automată (EN→RO)
+                </label>
+                <button id="save" style="background:#e50914;color:#fff;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;">
+                    Salvează
+                </button>
+                <button onclick="Lampa.Modal.close()" style="background:#666;color:#fff;padding:10px 20px;border:none;border-radius:4px;margin-left:10px;cursor:pointer;">
+                    Închide
+                </button>
             </div>`;
         
-        Lampa.Modal.open({ title: PLUGIN_NAME, html, size: 'medium' });
-        setTimeout(() => {
-            document.getElementById('save').onclick = () => {
-                saveSettings({
-                    enabled: document.getElementById('en').checked,
-                    translate: document.getElementById('tr').checked
-                });
-                showNotification('Setari salvate!');
-                Lampa.Modal.close();
-            };
-        }, 100);
-    }
-
-    // === INI?IALIZARE ===
-    function init() {
-        if (Lampa.Plugin && Lampa.Plugin.add) {
-            Lampa.Plugin.add({
-                id: PLUGIN_ID, name: PLUGIN_NAME, version: '3.1', author: 'Tu',
-                description: 'Subtitrari RO private + traducere automata',
-                init: () => {
-                    if (Lampa.Menu) Lampa.Menu.add('AutoSubs RO', showSettingsMenu);
-                    if (Lampa.Listener) {
-                        Lampa.Listener.follow('player', e => {
-                            if ((e.type === 'start' || e.type === 'play') && loadSettings().enabled) {
-                                setTimeout(() => searchSubtitles(e.data || {}), 3000);
-                            }
-                        });
-                    }
-                    showNotification('AutoSubs RO (privat) activat!');
-                }
-            });
+        if (Lampa.Modal) {
+            Lampa.Modal.open({ title: PLUGIN_NAME, html, size: 'medium' });
+            setTimeout(() => {
+                document.getElementById('save').onclick = () => {
+                    saveSettings({
+                        enabled: document.getElementById('en').checked,
+                        translate: document.getElementById('tr').checked
+                    });
+                    showNotification('Setări salvate!');
+                    Lampa.Modal.close();
+                };
+            }, 100);
         }
     }
 
-    if (window.Lampa) setTimeout(init, 1000);
-    else document.addEventListener('DOMContentLoaded', () => setTimeout(init, 2000));
+    // === INIȚIALIZARE CU MENIU GARANTAT ===
+    function initPlugin() {
+        console.log('AutoSubs RO: Inițializare...');
+
+        // 1. Adaugă în meniul principal
+        if (window.Lampa && Lampa.Menu && Lampa.Menu.add) {
+            Lampa.Menu.add('AutoSubs RO', showSettingsMenu);
+            console.log('Meniul adăugat în principal');
+        }
+
+        // 2. Fallback: Adaugă în Setări > Pluginuri
+        if (window.Lampa && Lampa.Settings && Lampa.Settings.main) {
+            Lampa.Settings.main('plugins', (element) => {
+                const btn = document.createElement('div');
+                btn.className = 'settings-folder selector';
+                btn.innerHTML = `
+                    <div class="settings-folder__icon">Subtitrări</div>
+                    <div class="settings-folder__name">AutoSubs RO - Setări</div>
+                `;
+                btn.onclick = showSettingsMenu;
+                element.appendChild(btn);
+            });
+        }
+
+        // 3. Listener player
+        if (window.Lampa && Lampa.Listener && Lampa.Listener.follow) {
+            Lampa.Listener.follow('player', e => {
+                if ((e.type === 'start' || e.type === 'play') && loadSettings().enabled) {
+                    setTimeout(() => searchSubtitles(e.data || {}), 3000);
+                }
+            });
+        }
+
+        // 4. Notificare finală
+        setTimeout(() => {
+            showNotification('AutoSubs RO activat! Mergi la Meniu > AutoSubs RO');
+        }, 2000);
+    }
+
+    // === PORNIRE SIGURĂ ===
+    if (window.Lampa) {
+        setTimeout(initPlugin, 1500);
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(initPlugin, 3000);
+        });
+    }
+
+    // Plugin registration (pentru lista de pluginuri)
+    if (window.Lampa && Lampa.Plugin && Lampa.Plugin.add) {
+        Lampa.Plugin.add({
+            id: PLUGIN_ID,
+            name: PLUGIN_NAME,
+            version: '4.0',
+            author: 'Tu',
+            description: 'Subtitrări RO automate + traducere gratuită',
+            init: initPlugin
+        });
+    }
+
 })();
