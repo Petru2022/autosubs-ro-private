@@ -1,4 +1,4 @@
-// AutoSubs RO - Plugin compatibil Lampa TV (webOS LG) & browser PC
+// AutoSubs RO - Plugin complet pentru Lampa TV (webOS LG) & browser PC
 (function () {
     'use strict';
 
@@ -111,15 +111,26 @@
         let season = '';
         let episode = '';
 
-        // Lampa 3.x, titlul filmului apare în .player-panel__title sau .card__title
+        // Lampa 3.x: titlul filmului apare în .player-panel__title sau .card__title
         const tNode = document.querySelector('.player-panel__title') || document.querySelector('.card__title');
         if (tNode) title = tNode.textContent.trim();
 
-        // Exemplu: încearcă să extragi și anul (dacă există)
+        // Încearcă să extragi și anul (dacă există)
         const yNode = document.querySelector('.player-panel__quality');
         if (yNode && /^\d{4}$/.test(yNode.textContent.trim())) year = yNode.textContent.trim();
 
-        // TODO: extrage sezon/episod dacă e serial
+        // TODO: extrage sezon/episod dacă e serial (poți extinde aici)
+        // Extragere sezon/episod pentru seriale
+        // Exemplu: din .player-panel__episode
+        const seNode = document.querySelector('.player-panel__episode');
+        if (seNode) {
+            const seText = seNode.textContent.trim();
+            const match = seText.match(/(\d+)\s*sezon.*?(\d+)\s*episod/i);
+            if (match) {
+                season = match[1] || '';
+                episode = match[2] || '';
+            }
+        }
 
         if (!title) {
             notify('[AutoSubs RO] Titlu lipsă, nu caut subtitrare.');
@@ -128,18 +139,179 @@
         searchSubtitles({ title, year, season_number: season, episode_number: episode });
     }
 
-    // === CĂUTARE SUBTITRĂRI (demo – aici poți integra funcția reală) ===
-    function searchSubtitles(info) {
-        notify(`[AutoSubs RO] Caut subtitrare pentru: ${info.title} ${info.year||''}`.trim());
-        // TODO: Integrează aici logica de descărcare și încărcare subtitle (vezi mai jos)
-        // Exemplu: downloadSrt(...);
+    // === CĂUTARE SUBTITRĂRI ===
+    function searchSubtitles(movieInfo = {}) {
+        const s = loadSettings();
+        if (!s.enabled) return;
+
+        const title = (movieInfo.title || '').trim();
+        const year = movieInfo.year || '';
+        const season = movieInfo.season_number;
+        const episode = movieInfo.episode_number;
+        const isSeries = Boolean(season && episode);
+
+        if (!title) return notify('[AutoSubs RO] Titlu lipsă pentru căutare.');
+
+        notify(`[AutoSubs RO] Caut subtitrare ENG: ${title}`);
+
+        const query = encodeURIComponent(title + (year ? ` ${year}` : ''));
+        const url = `https://yifysubtitles.ch/search?q=${query}`;
+
+        fetch(url)
+            .then(r => r.text())
+            .then(html => parseYify(html, { title, year, isSeries, season, episode }))
+            .catch(() => {
+                notify('[AutoSubs RO] YIFY eșuat, încerc Subscene...');
+                searchSubscene(title);
+            });
     }
 
-    // === DESCĂRCARE ȘI ÎNCĂRCARE SUBTITRARE (EXEMPLU) ===
-    // function downloadSrt(url) { ... }
-    // function loadInPlayer(srtText) { ... }
-    // function translateSrt(srt, callback) { ... }
-    // Adaugă aici funcțiile tale complete de procesare subtitle!
+    function parseYify(html, { title, year, isSeries, season, episode }) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const links = doc.querySelectorAll('a.subtitle-download');
+        let found = false;
+
+        for (const link of links) {
+            const row = link.closest('tr');
+            const text = row ? row.innerText.toLowerCase() : '';
+
+            if (text.includes('english') &&
+                (isSeries ? text.includes(`s0${season}`) : text.includes(year)) &&
+                link.href.includes('.srt')) {
+                found = true;
+                downloadSrt(link.href);
+                break;
+            }
+        }
+
+        if (!found) {
+            notify('[AutoSubs RO] Nu am găsit pe YIFY, încerc Subscene...');
+            searchSubscene(title);
+        }
+    }
+
+    function searchSubscene(title) {
+        const query = encodeURIComponent(title);
+        const url = `https://subscene.com/subtitles/searchbytitle?query=${query}`;
+
+        fetch(url)
+            .then(r => r.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const rows = doc.querySelectorAll('table tbody tr');
+                let found = false;
+
+                for (const row of rows) {
+                    const lang = row.querySelector('.a1 span:first-child');
+                    const link = row.querySelector('a');
+                    if (lang && lang.innerText.trim() === 'English' && link) {
+                        found = true;
+                        const subUrl = 'https://subscene.com' + link.href;
+                        fetch(subUrl)
+                            .then(r => r.text())
+                            .then(page => {
+                                const subDoc = parser.parseFromString(page, 'text/html');
+                                const dl = subDoc.querySelector('.download a');
+                                if (dl) downloadSrt('https://subscene.com' + dl.href);
+                            });
+                        break;
+                    }
+                }
+                if (!found) notify('[AutoSubs RO] Nu am găsit subtitrare ENG pe Subscene.');
+            });
+    }
+
+    // === DESCĂRCARE ȘI ÎNCĂRCARE SUBTITRARE ===
+    function downloadSrt(srtUrl) {
+        notify('[AutoSubs RO] Descarc .srt...');
+        fetch(srtUrl)
+            .then(r => r.text())
+            .then(text => {
+                if (loadSettings().translate) {
+                    translateSrt(text, translated => loadInPlayer(translated));
+                } else {
+                    loadInPlayer(text);
+                }
+            })
+            .catch(() => notify('[AutoSubs RO] Eroare descărcare .srt'));
+    }
+
+    // === TRADUCERE SIMPLĂ ===
+    function translateSrt(srt, callback) {
+        const lines = srt.split('\n');
+        let result = '', block = '', inText = false, count = 0;
+
+        const next = () => {
+            if (count >= lines.length) {
+                if (block) result += block + '\n';
+                callback(result);
+                return;
+            }
+            const line = lines[count++].trim();
+
+            if (/^\d+$/.test(line)) {
+                if (block) {
+                    translateBlock(block.trim(), translated => {
+                        result += translated + '\n';
+                        block = '';
+                        next();
+                    });
+                } else {
+                    result += line + '\n';
+                    next();
+                }
+            } else if (/^\d{2}:\d{2}:\d{2},\d{3} -->/.test(line)) {
+                result += line + '\n';
+                inText = true;
+            } else if (line && inText) {
+                block += line + ' ';
+            } else {
+                result += line + '\n';
+                inText = false;
+                next();
+            }
+        };
+        next();
+    }
+
+    function translateBlock(text, callback) {
+        if (!text.trim()) return callback(text);
+        const url = `https://translate.google.com/m?sl=en&tl=ro&hl=ro&q=${encodeURIComponent(text)}`;
+        fetch(url)
+            .then(r => r.text())
+            .then(html => {
+                const match = html.match(/class="result-container">([^<]+)</);
+                callback(match ? match[1] : text);
+            })
+            .catch(() => callback(text));
+    }
+
+    // === ÎNCĂRCARE SUBTITRARE ÎN PLAYER ===
+    function loadInPlayer(srtText) {
+        const blob = new Blob([srtText], { type: 'text/srt' });
+        const url = URL.createObjectURL(blob);
+
+        setTimeout(() => {
+            const video = document.querySelector('video');
+            if (!video) return;
+
+            video.querySelectorAll('track').forEach(t => t.remove());
+
+            const track = document.createElement('track');
+            track.kind = 'subtitles';
+            track.label = 'RO (Auto)';
+            track.srclang = 'ro';
+            track.src = url;
+            track.default = true;
+            video.appendChild(track);
+
+            if (video.textTracks[0]) video.textTracks[0].mode = 'showing';
+
+            notify('[AutoSubs RO] Subtitrare RO încărcată!');
+        }, 1500);
+    }
 
     // === INIȚIALIZARE ===
     document.addEventListener('DOMContentLoaded', () => {
